@@ -1193,7 +1193,9 @@ const MODAL_ICON = { presencial:'🏛️', virtual:'💻', hibrido:'🔄' };
 
 let db = {
   users: [
-    { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true }
+    { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] },
+    { id:2, nombre:'Iglesia El Progreso', user:'progreso', pass:'progreso123', iglesia:'El Progreso (Iglesia en Desarrollo)', rol:'servidor', activo:true, iglesias:['El Progreso (Iglesia en Desarrollo)'], fechaRegistro:'', fechaModificacion:'' },
+    { id:3, nombre:'Iglesia Nuevo Retablo', user:'retablo', pass:'retablo123', iglesia:'Nuevo Retablo (Iglesia en Desarrollo)', rol:'servidor', activo:true, iglesias:['Nuevo Retablo (Iglesia en Desarrollo)'], fechaRegistro:'', fechaModificacion:'' },
   ],
   servicios: [
     { id:1, iglesia:'Iglesia de Comas', nombre:'Culto Dominical 6am', tipo:'dominical', hora:'06:00', modalidad:'presencial', dia:'0', desc:'' },
@@ -1228,18 +1230,39 @@ function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
   const remember = document.getElementById('login-remember').checked;
-  const found = db.users.find(x => x.user === u && x.pass === p);
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  errEl.textContent = 'Usuario o contraseña incorrectos.';
+
+  // ── Step 1: hardcoded admin check (always works, no Sheets needed) ──
+  if (u === ADMIN_FALLBACK.user && p === ADMIN_FALLBACK.pass) {
+    const adminUser = db.users.find(x => x.user === 'admin') || { ...ADMIN_FALLBACK };
+    if (remember) {
+      localStorage.setItem('iacym_remembered_user', u);
+      localStorage.setItem('iacym_remembered_pass', p);
+    } else {
+      localStorage.removeItem('iacym_remembered_user');
+      localStorage.removeItem('iacym_remembered_pass');
+    }
+    _iniciarSesion(adminUser);
+    return;
+  }
+
+  // ── Step 2: check db.users (includes users loaded from Sheets) ──
+  const found = db.users.find(x => String(x.user).trim() === u && String(x.pass).trim() === p);
   if (!found) {
-    document.getElementById('login-error').style.display = 'block';
+    errEl.style.display = 'block';
     return;
   }
-  // Check if account is explicitly deactivated
-  if (found.activo === false || found.activo === 'false' || found.activo === 0 || found.activo === '0') {
-    document.getElementById('login-error').textContent = 'Esta cuenta está desactivada. Contacta al administrador.';
-    document.getElementById('login-error').style.display = 'block';
+
+  // Check if deactivated
+  const actFalse = [false, 'false', 0, '0'];
+  if (actFalse.includes(found.activo)) {
+    errEl.textContent = 'Esta cuenta está desactivada. Contacta al administrador.';
+    errEl.style.display = 'block';
     return;
   }
-  // Save or clear remembered credentials
+
   if (remember) {
     localStorage.setItem('iacym_remembered_user', u);
     localStorage.setItem('iacym_remembered_pass', p);
@@ -1247,7 +1270,6 @@ function doLogin() {
     localStorage.removeItem('iacym_remembered_user');
     localStorage.removeItem('iacym_remembered_pass');
   }
-  document.getElementById('login-error').style.display = 'none';
   _iniciarSesion(found);
 }
 
@@ -1271,6 +1293,7 @@ function _iniciarSesion(found) {
 }
 
 // ─── ADMIN FALLBACK (always guaranteed) ──────────────────────────────────────
+// ADMIN_FALLBACK — hardcoded emergency access, always works
 const ADMIN_FALLBACK = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
 
 function ensureAdmin() {
