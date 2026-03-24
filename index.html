@@ -1000,6 +1000,7 @@ async function syncFromSheets() {
     if (servicios.length)  db.servicios  = servicios.map(normalizeNum);
     if (asistencia.length) db.asistencia = asistencia.map(normalizeNum);
     sheetsConnected = true;
+    ensureAdmin(); // always keep admin accessible
     showSyncStatus('✅ Conectado', 'ok');
     return true;
   } catch(e) {
@@ -1269,28 +1270,46 @@ function _iniciarSesion(found) {
   });
 }
 
+// ─── ADMIN FALLBACK (always guaranteed) ──────────────────────────────────────
+const ADMIN_FALLBACK = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
+
+function ensureAdmin() {
+  // Always keep admin in db.users regardless of Sheets data
+  const hasAdmin = db.users.find(u => u.user === 'admin' && u.rol === 'admin');
+  if (!hasAdmin) db.users.unshift({ ...ADMIN_FALLBACK });
+}
+
 // Load remembered credentials + pre-load users from Sheets before login
 (async function initApp() {
   // Load remembered credentials
-  const u = localStorage.getItem('iacym_remembered_user');
-  const p = localStorage.getItem('iacym_remembered_pass');
-  if (u && p) {
-    document.getElementById('login-user').value = u;
-    document.getElementById('login-pass').value = p;
+  const savedUser = localStorage.getItem('iacym_remembered_user');
+  const savedPass = localStorage.getItem('iacym_remembered_pass');
+  if (savedUser && savedPass) {
+    document.getElementById('login-user').value = savedUser;
+    document.getElementById('login-pass').value = savedPass;
     document.getElementById('login-remember').checked = true;
   }
 
-  // Pre-load users from Sheets so new users can log in
+  // Pre-load users from Sheets — merge with local, never replace admin
   try {
     const rows = await sheetdbGet('Usuarios');
     if (rows && rows.length) {
-      db.users = rows.map(normalizeUser);
+      const sheetsUsers = rows.map(normalizeUser);
+      // Merge: keep local admin, add/update all others from Sheets
+      const adminLocal = db.users.find(u => u.rol === 'admin' && u.user === 'admin');
+      const otherSheets = sheetsUsers.filter(u => !(u.rol === 'admin' && u.user === 'admin'));
+      const adminSheet = sheetsUsers.find(u => u.rol === 'admin' && u.user === 'admin');
+      // Admin from Sheets wins over local if it exists there (respects password changes)
+      db.users = [adminSheet || adminLocal || ADMIN_FALLBACK, ...otherSheets];
       sheetsConnected = true;
-      console.log('[Init] Pre-loaded', db.users.length, 'users from Sheets');
+      console.log('[Init] Loaded', db.users.length, 'users from Sheets');
     }
   } catch(e) {
-    console.warn('[Init] Could not pre-load users:', e.message);
+    console.warn('[Init] Could not load users from Sheets:', e.message);
   }
+
+  // Final safety net — admin must always be present
+  ensureAdmin();
 })();
 
 function doLogout() {
