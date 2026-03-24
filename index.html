@@ -2178,32 +2178,45 @@ function exportarHTML() {
 // ─── USUARIOS ─────────────────────────────────────────────────────────────────
 function renderUsuarios() {
   const tbody = document.getElementById('user-body');
-  tbody.innerHTML = db.users.map((u,idx) => {
+  tbody.innerHTML = db.users.map((u, idx) => {
+    const uid = String(u.id);
+    const isMainAdmin = uid === '1';
     const iglesiaLabel = u.rol === 'admin'
       ? '<span style="color:var(--gold);font-size:11px">Todas las iglesias</span>'
       : (Array.isArray(u.iglesias) && u.iglesias.length
-          ? u.iglesias.map(i=>`<span style="display:inline-block;background:rgba(74,158,191,0.12);color:var(--accent);font-size:10px;padding:2px 7px;border-radius:10px;margin:1px">${i.replace(' (Iglesia en Desarrollo)','').replace('Iglesia de ','')}</span>`).join('')
-          : `<span style="color:var(--text-muted);font-size:11px">${u.iglesia||'—'}</span>`);
-    const rolBadge = u.rol==='admin'
+          ? u.iglesias.map(i => `<span style="display:inline-block;background:rgba(74,158,191,0.12);color:var(--accent);font-size:10px;padding:2px 7px;border-radius:10px;margin:1px">${i.replace(' (Iglesia en Desarrollo)', '').replace('Iglesia de ', '')}</span>`).join('')
+          : `<span style="color:var(--text-muted);font-size:11px">${u.iglesia || '—'}</span>`);
+    const rolBadge = u.rol === 'admin'
       ? '<span class="badge badge-gold">👑 Administrador</span>'
       : '<span class="badge badge-blue">⛪ Servidor</span>';
-    return `<tr>
-      <td style="color:var(--text-muted);font-size:12px">${idx+1}</td>
+    const activoBadge = `<span class="badge ${u.activo !== false ? 'badge-green' : 'badge-red'}">${u.activo !== false ? '✓ Activo' : '✕ Inactivo'}</span>`;
+    return `<tr data-uid="${uid}">
+      <td style="color:var(--text-muted);font-size:12px">${idx + 1}</td>
       <td style="font-weight:500">${u.nombre}</td>
       <td><code style="font-size:12px;color:var(--gold);background:rgba(201,168,76,0.08);padding:2px 8px;border-radius:4px">${u.user}</code></td>
       <td style="font-size:12px">${iglesiaLabel}</td>
       <td>${rolBadge}</td>
-      <td><span class="badge ${u.activo!==false?'badge-green':'badge-red'}">${u.activo!==false?'✓ Activo':'✕ Inactivo'}</span></td>
+      <td>${activoBadge}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-secondary btn-sm" onclick="editUser(${u.id})" title="Editar perfil">✏️</button>
-          <button class="btn btn-secondary btn-sm" onclick="openReset(${u.id})" title="Cambiar contraseña">🔑 Cambiar contraseña</button>
-          ${String(u.id)!=='1'?`<button class="btn btn-sm ${u.activo!==false?'btn-danger':'btn-success'}" onclick="toggleUser('${u.id}')">${u.activo!==false?'Desactivar':'Activar'}</button>`:''}
-          ${String(u.id)!=='1'?`<button class="btn btn-danger btn-sm" onclick="confirmarEliminarUsuario('${u.id}')" title="Eliminar perfil permanentemente">🗑 Eliminar</button>`:''}
+          <button class="btn btn-secondary btn-sm u-edit-btn" data-uid="${uid}" title="Editar perfil">✏️ Editar</button>
+          <button class="btn btn-secondary btn-sm u-pass-btn" data-uid="${uid}" title="Cambiar contraseña">🔑 Contraseña</button>
+          ${!isMainAdmin ? `<button class="btn btn-sm u-toggle-btn ${u.activo !== false ? 'btn-danger' : 'btn-success'}" data-uid="${uid}">${u.activo !== false ? 'Desactivar' : 'Activar'}</button>` : ''}
+          ${!isMainAdmin ? `<button class="btn btn-danger btn-sm u-del-btn" data-uid="${uid}">🗑 Eliminar</button>` : ''}
         </div>
       </td>
     </tr>`;
   }).join('');
+
+  // Attach event listeners safely using data-uid
+  tbody.querySelectorAll('.u-edit-btn').forEach(btn =>
+    btn.addEventListener('click', () => editUser(btn.dataset.uid)));
+  tbody.querySelectorAll('.u-pass-btn').forEach(btn =>
+    btn.addEventListener('click', () => openReset(btn.dataset.uid)));
+  tbody.querySelectorAll('.u-toggle-btn').forEach(btn =>
+    btn.addEventListener('click', () => toggleUser(btn.dataset.uid)));
+  tbody.querySelectorAll('.u-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => confirmarEliminarUsuario(btn.dataset.uid)));
 }
 
 function openModal(id) {
@@ -2216,6 +2229,7 @@ function openModal(id) {
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
   if(id==='modal-user') { editingUserId=null; clearUserForm(); document.getElementById('modal-user-title').textContent='Nuevo perfil'; }
+  if(id==='modal-reset') { resetTargetId=null; }
 }
 
 function clearUserForm() {
@@ -2247,8 +2261,8 @@ function getSelectedIglesias() {
 
 function editUser(id) {
   const u = db.users.find(x => String(x.id) === String(id));
-  if(!u) return;
-  editingUserId = id;
+  if (!u) { toast('No se encontró el perfil', 'error'); return; }
+  editingUserId = String(id);
   document.getElementById('u-nombre').value = u.nombre;
   document.getElementById('u-user').value = u.user;
   document.getElementById('u-pass').value = u.pass;
@@ -2289,7 +2303,7 @@ function guardarUsuario() {
   }
 
   if(editingUserId) {
-    const u = db.users.find(x=>x.id===editingUserId);
+    const u = db.users.find(x => String(x.id) === String(editingUserId));
     Object.assign(u, {nombre, user, pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, fechaModificacion: ahora()});
     pushToSheets('saveUsuario', u);
     toast('Perfil actualizado','success');
@@ -2307,6 +2321,8 @@ function guardarUsuario() {
 function openReset(id) {
   resetTargetId = id;
   const u = db.users.find(x => String(x.id) === String(id));
+  if (!u) { toast('No se encontró el perfil', 'error'); return; }
+  resetTargetId = String(id);
   document.getElementById('reset-uname').textContent = u.user;
   document.getElementById('reset-pass').value = '';
   openModal('modal-reset');
@@ -2319,7 +2335,8 @@ function resetPass() {
     markError('reset-pass', 'Mínimo 4 caracteres');
     toast('La contraseña debe tener al menos 4 caracteres','error'); return;
   }
-  const u = db.users.find(x=>x.id===resetTargetId);
+  const u = db.users.find(x => String(x.id) === String(resetTargetId));
+  if (!u) return;
   u.pass = pass;
   u.fechaModificacion = ahora();
   pushToSheets('saveUsuario', u);
