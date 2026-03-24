@@ -1244,13 +1244,24 @@ let resetTargetId = null;
 let reporteData = [];
 
 // ─── AUTH ────────────────────────────────────────────────────────────────────
-function doLogin() {
+async function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value.trim();
   const remember = document.getElementById('login-remember').checked;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
   errEl.textContent = 'Usuario o contraseña incorrectos.';
+
+  // Wait for users to finish loading from Sheets if not ready
+  if (!_usersReady && _usersLoadPromise) {
+    const btnEl = document.getElementById('login-btn');
+    if(btnEl) btnEl.disabled = true;
+    document.getElementById('login-loading').style.display = 'block';
+    document.getElementById('login-loading').textContent = '⏳ Cargando usuarios…';
+    await _usersLoadPromise;
+    document.getElementById('login-loading').style.display = 'none';
+    if(btnEl) btnEl.disabled = false;
+  }
 
   // Username is case-insensitive, password IS case-sensitive
   const uNorm = u.toLowerCase().trim();
@@ -1319,7 +1330,31 @@ function ensureAdmin() {
   if (!hasAdmin) db.users.unshift({ ...ADMIN_FALLBACK });
 }
 
-// Load credentials + pre-load users from Sheets BEFORE login
+// Global promise that resolves when users are loaded
+let _usersReady = false;
+let _usersLoadPromise = null;
+
+async function loadUsersFromSheets() {
+  try {
+    const rows = await sheetdbGet('Usuarios');
+    if (rows && rows.length) {
+      const sheetsUsers = rows.map(normalizeUser)
+        .filter(u => !String(u.user).startsWith('___') && u.activo !== false);
+      const adminLocal = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
+      const sheetsAdmin = sheetsUsers.find(u => String(u.user).toLowerCase() === 'admin' && u.rol === 'admin');
+      const others = sheetsUsers.filter(u => !(String(u.user).toLowerCase() === 'admin' && u.rol === 'admin'));
+      db.users = [sheetsAdmin || adminLocal, ...others];
+      sheetsConnected = true;
+      console.log('[Init] Loaded', db.users.length, 'users:', db.users.map(u=>u.user));
+    }
+  } catch(e) {
+    console.warn('[Init] Sheets error:', e.message);
+  }
+  ensureAdmin();
+  _usersReady = true;
+}
+
+// Start loading immediately on page load
 (async function initApp() {
   // Restore remembered credentials
   const savedUser = localStorage.getItem('iacym_remembered_user');
@@ -1330,35 +1365,18 @@ function ensureAdmin() {
     document.getElementById('login-remember').checked = true;
   }
 
-  // Show loading indicator
+  // Show loading
   const loadEl = document.getElementById('login-loading');
   const btnEl  = document.getElementById('login-btn');
   if(loadEl) loadEl.style.display = 'block';
   if(btnEl)  btnEl.disabled = true;
 
-  // Pre-load ALL users from Sheets so any user can log in
-  try {
-    const rows = await sheetdbGet('Usuarios');
-    if (rows && rows.length) {
-      const sheetsUsers = rows.map(normalizeUser)
-        .filter(u => !String(u.user).startsWith('___') && u.activo !== false); // exclude deleted
-      // Merge: admin always from local, others from Sheets
-      const adminLocal = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
-      const sheetsAdmin = sheetsUsers.find(u => u.user === 'admin' && u.rol === 'admin');
-      const others = sheetsUsers.filter(u => !(u.user === 'admin' && u.rol === 'admin'));
-      db.users = [sheetsAdmin || adminLocal, ...others];
-      sheetsConnected = true;
-      console.log('[Init] Loaded', db.users.length, 'users from Sheets');
-    }
-  } catch(e) {
-    console.warn('[Init] Could not pre-load users:', e.message);
-  } finally {
-    if(loadEl) loadEl.style.display = 'none';
-    if(btnEl)  btnEl.disabled = false;
-  }
+  // Load users and wait
+  _usersLoadPromise = loadUsersFromSheets();
+  await _usersLoadPromise;
 
-  // Always ensure admin is available
-  ensureAdmin();
+  if(loadEl) loadEl.style.display = 'none';
+  if(btnEl)  btnEl.disabled = false;
 })();
 
 function doLogout() {
