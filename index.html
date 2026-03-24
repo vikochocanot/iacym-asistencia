@@ -996,7 +996,14 @@ async function syncFromSheets() {
       sheetdbGet('Servicios'),
       sheetdbGet('Asistencia'),
     ]);
-    if (usuarios.length)   db.users      = usuarios.map(normalizeUser);
+    if (usuarios.length) {
+      // Merge Sheets users with local — preserve admin from local always
+      const sheetsUsers = usuarios.map(normalizeUser);
+      const adminLocal = db.users.find(u => u.user === 'admin' && u.rol === 'admin');
+      const sheetsAdmin = sheetsUsers.find(u => u.user === 'admin' && u.rol === 'admin');
+      const otherUsers = sheetsUsers.filter(u => !(u.user === 'admin' && u.rol === 'admin'));
+      db.users = [sheetsAdmin || adminLocal || ADMIN_FALLBACK, ...otherUsers];
+    }
     if (servicios.length)  db.servicios  = servicios.map(normalizeNum);
     if (asistencia.length) db.asistencia = asistencia.map(normalizeNum);
     sheetsConnected = true;
@@ -1194,8 +1201,6 @@ const MODAL_ICON = { presencial:'🏛️', virtual:'💻', hibrido:'🔄' };
 let db = {
   users: [
     { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] },
-    { id:2, nombre:'Iglesia El Progreso', user:'progreso', pass:'progreso123', iglesia:'El Progreso (Iglesia en Desarrollo)', rol:'servidor', activo:true, iglesias:['El Progreso (Iglesia en Desarrollo)'], fechaRegistro:'', fechaModificacion:'' },
-    { id:3, nombre:'Iglesia Nuevo Retablo', user:'retablo', pass:'retablo123', iglesia:'Nuevo Retablo (Iglesia en Desarrollo)', rol:'servidor', activo:true, iglesias:['Nuevo Retablo (Iglesia en Desarrollo)'], fechaRegistro:'', fechaModificacion:'' },
   ],
   servicios: [
     { id:1, iglesia:'Iglesia de Comas', nombre:'Culto Dominical 6am', tipo:'dominical', hora:'06:00', modalidad:'presencial', dia:'0', desc:'' },
@@ -1302,9 +1307,8 @@ function ensureAdmin() {
   if (!hasAdmin) db.users.unshift({ ...ADMIN_FALLBACK });
 }
 
-// Load remembered credentials + pre-load users from Sheets before login
-(async function initApp() {
-  // Load remembered credentials
+// Restore remembered credentials only — users load AFTER login
+(function initApp() {
   const savedUser = localStorage.getItem('iacym_remembered_user');
   const savedPass = localStorage.getItem('iacym_remembered_pass');
   if (savedUser && savedPass) {
@@ -1312,27 +1316,6 @@ function ensureAdmin() {
     document.getElementById('login-pass').value = savedPass;
     document.getElementById('login-remember').checked = true;
   }
-
-  // Pre-load users from Sheets — merge with local, never replace admin
-  try {
-    const rows = await sheetdbGet('Usuarios');
-    if (rows && rows.length) {
-      const sheetsUsers = rows.map(normalizeUser);
-      // Merge: keep local admin, add/update all others from Sheets
-      const adminLocal = db.users.find(u => u.rol === 'admin' && u.user === 'admin');
-      const otherSheets = sheetsUsers.filter(u => !(u.rol === 'admin' && u.user === 'admin'));
-      const adminSheet = sheetsUsers.find(u => u.rol === 'admin' && u.user === 'admin');
-      // Admin from Sheets wins over local if it exists there (respects password changes)
-      db.users = [adminSheet || adminLocal || ADMIN_FALLBACK, ...otherSheets];
-      sheetsConnected = true;
-      console.log('[Init] Loaded', db.users.length, 'users from Sheets');
-    }
-  } catch(e) {
-    console.warn('[Init] Could not load users from Sheets:', e.message);
-  }
-
-  // Final safety net — admin must always be present
-  ensureAdmin();
 })();
 
 function doLogout() {
