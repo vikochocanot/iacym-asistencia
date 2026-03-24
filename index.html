@@ -2178,6 +2178,8 @@ function exportarHTML() {
 // ─── USUARIOS ─────────────────────────────────────────────────────────────────
 function renderUsuarios() {
   const tbody = document.getElementById('user-body');
+  // Store users in a lookup so onclick can find by index
+  window._usersRef = db.users;
   tbody.innerHTML = db.users.map((u, idx) => {
     const uid = String(u.id);
     const isMainAdmin = uid === '1';
@@ -2189,8 +2191,11 @@ function renderUsuarios() {
     const rolBadge = u.rol === 'admin'
       ? '<span class="badge badge-gold">👑 Administrador</span>'
       : '<span class="badge badge-blue">⛪ Servidor</span>';
-    const activoBadge = `<span class="badge ${u.activo !== false ? 'badge-green' : 'badge-red'}">${u.activo !== false ? '✓ Activo' : '✕ Inactivo'}</span>`;
-    return `<tr data-uid="${uid}">
+    const activoOk = u.activo !== false && u.activo !== 'false' && u.activo !== 0 && u.activo !== '0';
+    const activoBadge = `<span class="badge ${activoOk ? 'badge-green' : 'badge-red'}">${activoOk ? '✓ Activo' : '✕ Inactivo'}</span>`;
+    const toggleLabel = activoOk ? 'Desactivar' : 'Activar';
+    const toggleClass = activoOk ? 'btn-danger' : 'btn-success';
+    return `<tr>
       <td style="color:var(--text-muted);font-size:12px">${idx + 1}</td>
       <td style="font-weight:500">${u.nombre}</td>
       <td><code style="font-size:12px;color:var(--gold);background:rgba(201,168,76,0.08);padding:2px 8px;border-radius:4px">${u.user}</code></td>
@@ -2199,31 +2204,23 @@ function renderUsuarios() {
       <td>${activoBadge}</td>
       <td>
         <div class="actions">
-          <button class="btn btn-secondary btn-sm u-edit-btn" data-uid="${uid}" title="Editar perfil">✏️ Editar</button>
-          <button class="btn btn-secondary btn-sm u-pass-btn" data-uid="${uid}" title="Cambiar contraseña">🔑 Contraseña</button>
-          ${!isMainAdmin ? `<button class="btn btn-sm u-toggle-btn ${u.activo !== false ? 'btn-danger' : 'btn-success'}" data-uid="${uid}">${u.activo !== false ? 'Desactivar' : 'Activar'}</button>` : ''}
-          ${!isMainAdmin ? `<button class="btn btn-danger btn-sm u-del-btn" data-uid="${uid}">🗑 Eliminar</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="editUser(window._usersRef[${idx}].id)" title="Editar perfil">✏️ Editar</button>
+          <button class="btn btn-secondary btn-sm" onclick="openReset(window._usersRef[${idx}].id)" title="Cambiar contraseña">🔑 Contraseña</button>
+          ${!isMainAdmin ? `<button class="btn btn-sm ${toggleClass}" onclick="toggleUser(window._usersRef[${idx}].id)">${toggleLabel}</button>` : ''}
+          ${!isMainAdmin ? `<button class="btn btn-danger btn-sm" onclick="confirmarEliminarUsuario(window._usersRef[${idx}].id)">🗑 Eliminar</button>` : ''}
         </div>
       </td>
     </tr>`;
   }).join('');
-
-  // Attach event listeners safely using data-uid
-  tbody.querySelectorAll('.u-edit-btn').forEach(btn =>
-    btn.addEventListener('click', () => editUser(btn.dataset.uid)));
-  tbody.querySelectorAll('.u-pass-btn').forEach(btn =>
-    btn.addEventListener('click', () => openReset(btn.dataset.uid)));
-  tbody.querySelectorAll('.u-toggle-btn').forEach(btn =>
-    btn.addEventListener('click', () => toggleUser(btn.dataset.uid)));
-  tbody.querySelectorAll('.u-del-btn').forEach(btn =>
-    btn.addEventListener('click', () => confirmarEliminarUsuario(btn.dataset.uid)));
 }
 
 function openModal(id) {
   document.getElementById(id).classList.add('open');
-  if(id==='modal-user' && !editingUserId) {
-    // Default state for new user
-    setTimeout(()=>seleccionarRol('servidor'), 10);
+  if(id==='modal-user') {
+    ensureIglesiaCheckboxes();
+    if(!editingUserId) {
+      setTimeout(()=>seleccionarRol('servidor'), 10);
+    }
   }
 }
 function closeModal(id) {
@@ -2263,18 +2260,43 @@ function editUser(id) {
   const u = db.users.find(x => String(x.id) === String(id));
   if (!u) { toast('No se encontró el perfil', 'error'); return; }
   editingUserId = String(id);
-  document.getElementById('u-nombre').value = u.nombre;
-  document.getElementById('u-user').value = u.user;
-  document.getElementById('u-pass').value = u.pass;
-  // Set role
-  seleccionarRol(u.rol==='admin' ? 'admin' : 'servidor');
+
+  // Ensure checkboxes are populated first
+  ensureIglesiaCheckboxes();
+
+  // Fill form fields
+  const nombreEl = document.getElementById('u-nombre');
+  const userEl   = document.getElementById('u-user');
+  const passEl   = document.getElementById('u-pass');
+  if (nombreEl) nombreEl.value = u.nombre;
+  if (userEl)   userEl.value   = u.user;
+  if (passEl)   passEl.value   = u.pass;
+
+  // Set role cards
+  seleccionarRol(u.rol === 'admin' ? 'admin' : 'servidor');
+
   // Set iglesia checkboxes
-  const iglesias = Array.isArray(u.iglesias) ? u.iglesias : (u.iglesia ? [u.iglesia] : []);
+  const iglesias = Array.isArray(u.iglesias) && u.iglesias.length
+    ? u.iglesias : (u.iglesia ? [u.iglesia] : []);
   document.querySelectorAll('.u-igl-chk').forEach(c => {
     c.checked = iglesias.includes(c.value);
   });
-  document.getElementById('modal-user-title').textContent = 'Editar perfil';
+
+  const titleEl = document.getElementById('modal-user-title');
+  if (titleEl) titleEl.textContent = 'Editar perfil';
   openModal('modal-user');
+}
+
+function ensureIglesiaCheckboxes() {
+  const container = document.getElementById('u-iglesia-checkboxes');
+  if (!container || container.children.length > 0) return;
+  IGLESIAS.forEach(ig => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--deep3);border-radius:6px;border:1px solid rgba(201,168,76,0.1)';
+    div.innerHTML = `<input type="checkbox" value="${ig}" style="accent-color:var(--gold);width:15px;height:15px;cursor:pointer" class="u-igl-chk">
+      <label style="font-size:12px;cursor:pointer;line-height:1.3">${ig}</label>`;
+    container.appendChild(div);
+  });
 }
 
 function guardarUsuario() {
