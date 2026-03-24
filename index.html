@@ -1084,9 +1084,10 @@ function normalizeUser(u) {
     try { u.iglesias = JSON.parse(u.iglesias); } catch(e) { u.iglesias = []; }
   }
   if (!Array.isArray(u.iglesias)) u.iglesias = [];
-  // activo: false if explicitly set to false/0/'false'/'0'/'eliminado'
-  const actFalse = [false, 'false', 0, '0', 'eliminado'];
-  u.activo = !actFalse.includes(u.activo);
+  // Normalize activo — handle TRUE/FALSE/true/false/1/0/eliminado from Sheets
+  const activoStr = String(u.activo).toLowerCase().trim();
+  const actFalse = ['false', '0', 'eliminado', 'no'];
+  u.activo = !actFalse.includes(activoStr);
   return u;
 }
 
@@ -1275,8 +1276,10 @@ function doLogin() {
   }
 
   if (!found) { errEl.style.display = 'block'; return; }
-  if (found.activo === false || found.activo === 'false' || found.activo === 0 || found.activo === '0' || found.activo === 'eliminado') {
-    errEl.textContent = 'Esta cuenta está desactivada.';
+  // Check if deactivated — handles all formats from Sheets
+  const activoStr = String(found.activo).toLowerCase().trim();
+  if (['false', '0', 'eliminado', 'no'].includes(activoStr)) {
+    errEl.textContent = 'Esta cuenta está desactivada. Contacta al administrador.';
     errEl.style.display = 'block';
     return;
   }
@@ -1338,7 +1341,7 @@ function ensureAdmin() {
     const rows = await sheetdbGet('Usuarios');
     if (rows && rows.length) {
       const sheetsUsers = rows.map(normalizeUser)
-        .filter(u => !String(u.user).startsWith('___')); // exclude deleted
+        .filter(u => !String(u.user).startsWith('___') && u.activo !== false); // exclude deleted
       // Merge: admin always from local, others from Sheets
       const adminLocal = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
       const sheetsAdmin = sheetsUsers.find(u => u.user === 'admin' && u.rol === 'admin');
