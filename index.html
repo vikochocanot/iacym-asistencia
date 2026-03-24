@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IACYM Comas — Gestión de Asistencia</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEMUlEQVR4nO2V72vVdRTH3+d8v/d77+Y2M2s6pzkLEjF/hFtsVpRPWjY32YM7Jljg06AH/QXfe31QJD2SiIqiIEi3sUidlSC5gdhcUxdaRBmJaP6s6ba7++v7Oe8e6KU7EQotg9jr4ft7Dud8vucXMMsss/zHyK0CWaYJIADvSSYzAt9DpBRcBAQgJ3ZtXpr38pWWixVqEhMXVyaHMje//StoKfiR3rb64Z727oJEyxHpsliC4bSreU4EJEMtdyIhYThTu+MERMDhj59f7JlshDkfIssSieAhGq4Z+MjhzzqqBwcHlWGopTKJgOl02ggIyxIp2dy0kxuJQsMQ5foM5FRvMshY9iU6d9WH94NThHOrgnMTmfwBEA9rTJuLk4XtLdsOnCm9/tinrQsLxVjd+u6B43fwaEFZY/vXo/zKmKJe1DvvfPFoPFyIXBNVF5szT41WOTdoGe1rWwLaNZEvTg7vDpZ6YqvG+jvPxRP60Iq2/lECcmpvZ2M+k/09inClKl6dm8pP1qp6AQCYuYLFPa7v2n+egJSmS77pad/izOZDUA9InRCXDFjoKU6aWaVAC4mEdzWK6EeRLfeC4o4oH6yA8mmSQwvur9h+dTz3Icna6jlBy1SmcIiQRVRcBLEAxkaIxEQwCSDwNJdclzw4USqlRnTzAGkG0BSjvWGCEQUOEHJWRFcRnFrTuef9dcm975A8yaL/ONSRxkcV8qQZLxnZCJEncnnb0dS9fyfBGhiTIL4C8K0q9pHca4YLeYsvKZsq8VVkPsksoANeMXdW4om1FBDONorIMfW0MNrX8TZg00XHTFXC6xvPFVeLynESc4qR5Sgy6oGX5tUEr430tL1OkYNK5OjJT3BYLY5nBJwSkQcTcX+KYaipVBoATIZ72reIsQ7C1nk1rmN8wn+TxoyorBdgkJQRku1QHG/uHnj31o7q7U16XV19rjRVAGx416aPfMHOxptN+vWuzQ3OFe97auvnY+W+R3qTFXK0r32lRXxMVLQq7q2dykaLAC5wQbDVjwobafIywO9ivk7kibdakvt+TqVCSaXSLNWRhKRSoaTTaQvDUJ9tGKvZsG3PNQAY7W+tc3mtR8zPWsEKQaAVkbM6AA+Y6WUBgKO7X3iFlLyKnCDQKpTvEbMxr8h4UbQLxeiD5he/PFe2Mf8ShlBJw0Z2b2qKlL/6TlaTrDXQqegFEYopxoVhqO8tGvDWVC98FSIXBHDqS6YQRS7u+yg6M2rloSCRlaaOgem/E52ElA7ZaH9nnRUL8zPZqdMbtg3lSja/HHom0XCltijlTsOftG0U1Tr1eLrKi/046fL0oIFBKzK4fn5D11AGd3EdS6VKAZB02oDbnONTvcmqaZtuiMckyDrNMeJvzVv2Xb7Tg1S+vmfoZcvoT/EfOjB3TRhCGYY3jsht/tIss8zyv+IP9xo0YlJ2EswAAAAASUVORK5CYII=">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEMUlEQVR4nO2V72vVdRTH3+d8v/d77+Y2M2s6pzkLEjF/hFtsVpRPWjY32YM7Jljg06AH/QXfe31QJD2SiIqiIEi3sUidlSC5gdhcUxdaRBmJaP6s6ba7++v7Oe8e6KU7EQotg9jr4ft7Dud8vucXMMsss/zHyK0CWaYJIADvSSYzAt9DpBRcBAQgJ3ZtXpr38pWWixVqEhMXVyaHMje//StoKfiR3rb64Z727oJEyxHpsliC4bSreU4EJEMtdyIhYThTu+MERMDhj59f7JlshDkfIssSieAhGq4Z+MjhzzqqBwcHlWGopTKJgOl02ggIyxIp2dy0kxuJQsMQ5foM5FRvMshY9iU6d9WH94NThHOrgnMTmfwBEA9rTJuLk4XtLdsOnCm9/tinrQsLxVjd+u6B43fwaEFZY/vXo/zKmKJe1DvvfPFoPFyIXBNVF5szT41WOTdoGe1rWwLaNZEvTg7vDpZ6YqvG+jvPxRP60Iq2/lECcmpvZ2M+k/09inClKl6dm8pP1qp6AQCYuYLFPa7v2n+egJSmS77pad/izOZDUA9InRCXDFjoKU6aWaVAC4mEdzWK6EeRLfeC4o4oH6yA8mmSQwvur9h+dTz3Icna6jlBy1SmcIiQRVRcBLEAxkaIxEQwCSDwNJdclzw4USqlRnTzAGkG0BSjvWGCEQUOEHJWRFcRnFrTuef9dcm975A8yaL/ONSRxkcV8qQZLxnZCJEncnnb0dS9fyfBGhiTIL4C8K0q9pHca4YLeYsvKZsq8VVkPsksoANeMXdW4om1FBDONorIMfW0MNrX8TZg00XHTFXC6xvPFVeLynESc4qR5Sgy6oGX5tUEr430tL1OkYNK5OjJT3BYLY5nBJwSkQcTcX+KYaipVBoATIZ72reIsQ7C1nk1rmN8wn+TxoyorBdgkJQRku1QHG/uHnj31o7q7U16XV19rjRVAGx416aPfMHOxptN+vWuzQ3OFe97auvnY+W+R3qTFXK0r32lRXxMVLQq7q2dykaLAC5wQbDVjwobafIywO9ivk7kibdakvt+TqVCSaXSLNWRhKRSoaTTaQvDUJ9tGKvZsG3PNQAY7W+tc3mtR8zPWsEKQaAVkbM6AA+Y6WUBgKO7X3iFlLyKnCDQKpTvEbMxr8h4UbQLxeiD5he/PFe2Mf8ShlBJw0Z2b2qKlL/6TlaTrDXQqegFEYopxoVhqO8tGvDWVC98FSIXBHDqS6YQRS7u+yg6M2rloSCRlaaOgem/E52ElA7ZaH9nnRUL8zPZqdMbtg3lSja/HHom0XCltijlTsOftG0U1Tr1eLrKi/046fL0oIFBKzK4fn5D11AGd3EdS6VKAZB02oDbnONTvcmqaZtuiMckyDrNMeJvzVv2Xb7Tg1S+vmfoZcvoT/EfOjB3TRhCGYY3jsht/tIss8zyv+IP9xo0YlJ2EswAAAAASUVORK5CYII=">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -384,14 +386,7 @@
     <p id="login-loading" style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;display:none">
       ⏳ Cargando usuarios…
     </p>
-    <div style="margin-top:16px;text-align:center;display:flex;gap:12px;justify-content:center">
-      <button onclick="diagnosticarLogin()" style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;text-decoration:underline">
-        🔍 Diagnosticar
-      </button>
-      <button onclick="testAdmin()" style="background:none;border:none;color:var(--gold);font-size:12px;cursor:pointer;text-decoration:underline">
-        🔑 Probar admin
-      </button>
-    </div>
+
   </div>
 </div>
 
@@ -704,6 +699,7 @@
             <button class="btn btn-primary" style="width:auto" onclick="guardarConfigUrl()">💾 Guardar y conectar</button>
             <button class="btn btn-success btn-sm" onclick="sincronizarAhora()">☁️ Sincronizar ahora</button>
             <button class="btn btn-secondary btn-sm" onclick="exportarBackupJSON()">⬇ Backup JSON</button>
+            <button class="btn btn-secondary btn-sm" onclick="diagnosticarLogin()">🔍 Diagnosticar usuarios</button>
           </div>
 
           <div class="sep"></div>
