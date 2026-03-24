@@ -375,9 +375,12 @@
     </div>
     <br>
     <button class="btn btn-primary" onclick="doLogin()">Ingresar al sistema</button>
-    <div style="margin-top:16px;text-align:center">
+    <div style="margin-top:16px;text-align:center;display:flex;gap:12px;justify-content:center">
       <button onclick="diagnosticarLogin()" style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;text-decoration:underline">
-        🔍 Diagnosticar conexión
+        🔍 Diagnosticar
+      </button>
+      <button onclick="testAdmin()" style="background:none;border:none;color:var(--gold);font-size:12px;cursor:pointer;text-decoration:underline">
+        🔑 Probar admin
       </button>
     </div>
   </div>
@@ -1233,50 +1236,46 @@ let reporteData = [];
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 function doLogin() {
   const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value;
+  const p = document.getElementById('login-pass').value.trim();
   const remember = document.getElementById('login-remember').checked;
   const errEl = document.getElementById('login-error');
   errEl.style.display = 'none';
   errEl.textContent = 'Usuario o contraseña incorrectos.';
 
-  // ── Step 1: hardcoded admin check (always works, no Sheets needed) ──
-  if (u === ADMIN_FALLBACK.user && p === ADMIN_FALLBACK.pass) {
-    const adminUser = db.users.find(x => x.user === 'admin') || { ...ADMIN_FALLBACK };
-    if (remember) {
-      localStorage.setItem('iacym_remembered_user', u);
-      localStorage.setItem('iacym_remembered_pass', p);
-    } else {
-      localStorage.removeItem('iacym_remembered_user');
-      localStorage.removeItem('iacym_remembered_pass');
+  // Normalize: compare usernames case-insensitively
+  const uNorm = u.toLowerCase();
+
+  // Always check admin first - hardcoded, never fails
+  if (uNorm === 'admin' && p === 'admin123') {
+    const adminObj = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
+    if (remember) { localStorage.setItem('iacym_remembered_user', u); localStorage.setItem('iacym_remembered_pass', p); }
+    else { localStorage.removeItem('iacym_remembered_user'); localStorage.removeItem('iacym_remembered_pass'); }
+    _iniciarSesion(adminObj);
+    return;
+  }
+
+  // Check other users — username is case-insensitive, password is case-sensitive
+  let found = null;
+  for (let i = 0; i < db.users.length; i++) {
+    const usr = db.users[i];
+    if (String(usr.user).trim().toLowerCase() === uNorm && String(usr.pass).trim() === p) {
+      found = usr;
+      break;
     }
-    _iniciarSesion(adminUser);
-    return;
   }
 
-  // ── Step 2: check db.users (includes users loaded from Sheets) ──
-  const found = db.users.find(x => String(x.user).trim() === u && String(x.pass).trim() === p);
-  if (!found) {
+  if (!found) { errEl.style.display = 'block'; return; }
+  if (found.activo === false || found.activo === 'false' || found.activo === 0 || found.activo === '0' || found.activo === 'eliminado') {
+    errEl.textContent = 'Esta cuenta está desactivada.';
     errEl.style.display = 'block';
     return;
   }
 
-  // Check if deactivated
-  const actFalse = [false, 'false', 0, '0'];
-  if (actFalse.includes(found.activo)) {
-    errEl.textContent = 'Esta cuenta está desactivada. Contacta al administrador.';
-    errEl.style.display = 'block';
-    return;
-  }
-
-  if (remember) {
-    localStorage.setItem('iacym_remembered_user', u);
-    localStorage.setItem('iacym_remembered_pass', p);
-  } else {
-    localStorage.removeItem('iacym_remembered_user');
-    localStorage.removeItem('iacym_remembered_pass');
-  }
+  if (remember) { localStorage.setItem('iacym_remembered_user', u); localStorage.setItem('iacym_remembered_pass', p); }
+  else { localStorage.removeItem('iacym_remembered_user'); localStorage.removeItem('iacym_remembered_pass'); }
   _iniciarSesion(found);
 }
+
 
 function _iniciarSesion(found) {
   currentUser = found;
@@ -2340,12 +2339,12 @@ function guardarUsuario() {
 
   if(editingUserId) {
     const u = db.users.find(x => String(x.id) === String(editingUserId));
-    Object.assign(u, {nombre, user, pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, fechaModificacion: ahora()});
+    Object.assign(u, {nombre, user: user.toLowerCase(), pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, fechaModificacion: ahora()});
     pushToSheets('saveUsuario', u);
     toast('Perfil actualizado','success');
   } else {
     if(db.users.find(x=>x.user===user)) { toast('El usuario ya existe','error'); return; }
-    const newU = {id:String(Date.now()), nombre, user, pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, activo:true, fechaRegistro: ahora(), fechaModificacion: ''};
+    const newU = {id:String(Date.now()), nombre, user: user.toLowerCase(), pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, activo:true, fechaRegistro: ahora(), fechaModificacion: ''};
     db.users.push(newU);
     pushToSheets('saveUsuario', newU);
     toast('Perfil creado','success');
@@ -2540,6 +2539,12 @@ function toast(msg, type='info') {
 }
 
 // ─── DIAGNÓSTICO ─────────────────────────────────────────────────────────────
+function testAdmin() {
+  document.getElementById('login-user').value = 'admin';
+  document.getElementById('login-pass').value = 'admin123';
+  doLogin();
+}
+
 async function diagnosticarLogin() {
   const el = document.getElementById('diag-content');
   if (!el) return;
