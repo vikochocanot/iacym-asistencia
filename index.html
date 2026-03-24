@@ -925,9 +925,11 @@ async function sheetdbCreate(sheet, row) {
 }
 
 async function sheetdbUpdate(sheet, id, row) {
-  // SheetDB PATCH updates only the fields sent; PUT replaces the whole row
-  return sheetdbRequest(`${SHEETDB}/id/${encodeURIComponent(id)}?sheet=${sheet}`, 'PATCH',
-    { data: flattenRow(row) });
+  const url = `${SHEETDB}/id/${encodeURIComponent(String(id))}?sheet=${sheet}`;
+  console.log('[Sheets] PATCH URL:', url);
+  const flat = flattenRow(row);
+  console.log('[Sheets] PATCH body:', { data: flat });
+  return sheetdbRequest(url, 'PATCH', { data: flat });
 }
 
 async function sheetdbDelete(sheet, id) {
@@ -957,7 +959,11 @@ async function syncFromSheets() {
 
 // ── Push a single record to Sheets (always fresh GET to check existence) ──────
 async function pushToSheets(action, data) {
-  if (!sheetsConnected) return;
+  if (!sheetsConnected) {
+    console.warn('pushToSheets: not connected, skipping');
+    showSyncStatus('⚠️ Sin conexión Sheets', 'warn');
+    return;
+  }
   showSyncStatus('💾 Guardando…', 'info');
 
   const sheetMap = {
@@ -972,21 +978,32 @@ async function pushToSheets(action, data) {
 
   try {
     if (action.startsWith('delete')) {
-      await sheetdbDelete(sheet, data.id);
+      console.log(`[Sheets] DELETE ${sheet} id=${data.id}`);
+      const r = await sheetdbDelete(sheet, data.id);
+      console.log(`[Sheets] DELETE result:`, r);
     } else {
-      // Always do a fresh GET to check if the row exists
+      // Fresh GET to check existence
+      console.log(`[Sheets] GET ${sheet} to check id=${data.id}`);
       const rows = await sheetdbGet(sheet);
+      console.log(`[Sheets] GET returned ${rows.length} rows`);
       const exists = rows.find(r => String(r.id) === String(data.id));
+      console.log(`[Sheets] exists:`, !!exists, exists ? `(id=${exists.id})` : '');
+
       if (exists) {
-        await sheetdbUpdate(sheet, data.id, data);
+        console.log(`[Sheets] PATCH ${sheet} id=${data.id}`, flattenRow(data));
+        const r = await sheetdbUpdate(sheet, data.id, data);
+        console.log(`[Sheets] PATCH result:`, r);
       } else {
-        await sheetdbCreate(sheet, data);
+        console.log(`[Sheets] POST (create) ${sheet}`, flattenRow(data));
+        const r = await sheetdbCreate(sheet, data);
+        console.log(`[Sheets] POST result:`, r);
       }
     }
     showSyncStatus('✅ Guardado en Sheets', 'ok');
   } catch(e) {
-    console.warn('pushToSheets error:', e);
-    showSyncStatus('⚠️ Error al guardar en Sheets', 'warn');
+    console.error('[Sheets] pushToSheets error:', e);
+    showSyncStatus('⚠️ Error: ' + e.message, 'warn');
+    toast('⚠️ Sheets: ' + e.message, 'error');
   }
 }
 
@@ -995,8 +1012,9 @@ function normalizeUser(u) {
     try { u.iglesias = JSON.parse(u.iglesias); } catch(e) { u.iglesias = []; }
   }
   if (!Array.isArray(u.iglesias)) u.iglesias = [];
-  u.activo = u.activo === true || u.activo === 'true' || u.activo === 1 || u.activo === '1';
-  u.id = Number(u.id) || u.id;
+  // activo: false only if explicitly set to false/0/'false'/'0'
+  const actFalse = [false, 'false', 0, '0'];
+  u.activo = !actFalse.includes(u.activo);
   return u;
 }
 
@@ -1013,6 +1031,8 @@ function showSyncStatus(msg, type = 'info') {
   el.textContent = msg;
   el.style.color = type === 'ok' ? 'var(--success)' : type === 'warn' ? 'var(--gold)' : 'var(--text-muted)';
   if (type === 'ok') setTimeout(() => { if (el.textContent === msg) el.textContent = '✅ Conectado'; }, 3000);
+  // Also log to console with timestamp
+  console.log(`[SyncStatus ${new Date().toLocaleTimeString()}] ${msg}`);
 }
 
 function getScriptUrl() { return SHEETDB; }
@@ -1155,8 +1175,14 @@ function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value;
   const remember = document.getElementById('login-remember').checked;
-  const found = db.users.find(x => x.user === u && x.pass === p && x.activo !== false);
+  const found = db.users.find(x => x.user === u && x.pass === p);
   if (!found) {
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  // Check if account is explicitly deactivated
+  if (found.activo === false || found.activo === 'false' || found.activo === 0 || found.activo === '0') {
+    document.getElementById('login-error').textContent = 'Esta cuenta está desactivada. Contacta al administrador.';
     document.getElementById('login-error').style.display = 'block';
     return;
   }
@@ -1191,14 +1217,27 @@ function _iniciarSesion(found) {
   });
 }
 
-// Load remembered credentials on page load
-(function loadRemembered() {
+// Load remembered credentials + pre-load users from Sheets before login
+(async function initApp() {
+  // Load remembered credentials
   const u = localStorage.getItem('iacym_remembered_user');
   const p = localStorage.getItem('iacym_remembered_pass');
   if (u && p) {
     document.getElementById('login-user').value = u;
     document.getElementById('login-pass').value = p;
     document.getElementById('login-remember').checked = true;
+  }
+
+  // Pre-load users from Sheets so new users can log in
+  try {
+    const rows = await sheetdbGet('Usuarios');
+    if (rows && rows.length) {
+      db.users = rows.map(normalizeUser);
+      sheetsConnected = true;
+      console.log('[Init] Pre-loaded', db.users.length, 'users from Sheets');
+    }
+  } catch(e) {
+    console.warn('[Init] Could not pre-load users:', e.message);
   }
 })();
 
@@ -2178,7 +2217,7 @@ function guardarUsuario() {
     toast('Perfil actualizado','success');
   } else {
     if(db.users.find(x=>x.user===user)) { toast('El usuario ya existe','error'); return; }
-    const newU = {id:Date.now(), nombre, user, pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, activo:true, fechaRegistro: ahora(), fechaModificacion: ''};
+    const newU = {id:String(Date.now()), nombre, user, pass, rol, iglesia, iglesias: rol==='admin'?[]:iglesias, activo:true, fechaRegistro: ahora(), fechaModificacion: ''};
     db.users.push(newU);
     pushToSheets('saveUsuario', newU);
     toast('Perfil creado','success');
