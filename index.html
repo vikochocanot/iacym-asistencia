@@ -997,8 +997,8 @@ async function syncFromSheets() {
       sheetdbGet('Asistencia'),
     ]);
     if (usuarios.length) {
-      // Merge Sheets users with local — preserve admin from local always
-      const sheetsUsers = usuarios.map(normalizeUser);
+      const sheetsUsers = usuarios.map(normalizeUser)
+        .filter(u => !u.user.startsWith('___')); // exclude deleted (histórico)
       const adminLocal = db.users.find(u => u.user === 'admin' && u.rol === 'admin');
       const sheetsAdmin = sheetsUsers.find(u => u.user === 'admin' && u.rol === 'admin');
       const otherUsers = sheetsUsers.filter(u => !(u.user === 'admin' && u.rol === 'admin'));
@@ -1072,8 +1072,8 @@ function normalizeUser(u) {
     try { u.iglesias = JSON.parse(u.iglesias); } catch(e) { u.iglesias = []; }
   }
   if (!Array.isArray(u.iglesias)) u.iglesias = [];
-  // activo: false only if explicitly set to false/0/'false'/'0'
-  const actFalse = [false, 'false', 0, '0'];
+  // activo: false if explicitly set to false/0/'false'/'0'/'eliminado'
+  const actFalse = [false, 'false', 0, '0', 'eliminado'];
   u.activo = !actFalse.includes(u.activo);
   return u;
 }
@@ -2198,8 +2198,8 @@ function renderUsuarios() {
         <div class="actions">
           <button class="btn btn-secondary btn-sm" onclick="editUser(${u.id})" title="Editar perfil">✏️</button>
           <button class="btn btn-secondary btn-sm" onclick="openReset(${u.id})" title="Cambiar contraseña">🔑 Cambiar contraseña</button>
-          ${u.id!==1?`<button class="btn btn-sm ${u.activo!==false?'btn-danger':'btn-success'}" onclick="toggleUser(${u.id})">${u.activo!==false?'Desactivar':'Activar'}</button>`:''}
-          ${u.id!==1?`<button class="btn btn-danger btn-sm" onclick="confirmarEliminarUsuario(${u.id})" title="Eliminar perfil permanentemente">🗑 Eliminar</button>`:''}
+          ${String(u.id)!=='1'?`<button class="btn btn-sm ${u.activo!==false?'btn-danger':'btn-success'}" onclick="toggleUser('${u.id}')">${u.activo!==false?'Desactivar':'Activar'}</button>`:''}
+          ${String(u.id)!=='1'?`<button class="btn btn-danger btn-sm" onclick="confirmarEliminarUsuario('${u.id}')" title="Eliminar perfil permanentemente">🗑 Eliminar</button>`:''}
         </div>
       </td>
     </tr>`;
@@ -2246,7 +2246,7 @@ function getSelectedIglesias() {
 }
 
 function editUser(id) {
-  const u = db.users.find(x=>x.id===id);
+  const u = db.users.find(x => String(x.id) === String(id));
   if(!u) return;
   editingUserId = id;
   document.getElementById('u-nombre').value = u.nombre;
@@ -2306,7 +2306,7 @@ function guardarUsuario() {
 
 function openReset(id) {
   resetTargetId = id;
-  const u = db.users.find(x=>x.id===id);
+  const u = db.users.find(x => String(x.id) === String(id));
   document.getElementById('reset-uname').textContent = u.user;
   document.getElementById('reset-pass').value = '';
   openModal('modal-reset');
@@ -2329,7 +2329,7 @@ function resetPass() {
 }
 
 function toggleUser(id) {
-  const u = db.users.find(x=>x.id===id);
+  const u = db.users.find(x => String(x.id) === String(id));
   u.activo = !u.activo;
   u.fechaModificacion = ahora();
   pushToSheets('saveUsuario', u);
@@ -2340,8 +2340,8 @@ function toggleUser(id) {
 let _eliminarUserId = null;
 
 function confirmarEliminarUsuario(id) {
-  const u = db.users.find(x=>x.id===id);
-  if (!u) return;
+  const u = db.users.find(x => String(x.id) === String(id));
+  if (!u) { toast('No se encontró el perfil', 'error'); return; }
   _eliminarUserId = id;
   document.getElementById('eliminar-user-nombre').textContent = u.nombre;
   document.getElementById('eliminar-user-user').textContent = '👤 ' + u.user;
@@ -2353,16 +2353,28 @@ function confirmarEliminarUsuario(id) {
 
 async function ejecutarEliminarUsuario() {
   if (!_eliminarUserId) return;
-  const u = db.users.find(x=>x.id===_eliminarUserId);
-  if (!u) return;
-  // Remove from local db
-  db.users = db.users.filter(x=>x.id!==_eliminarUserId);
-  // Remove from Sheets
-  await pushToSheets('deleteUsuario', { id: _eliminarUserId });
+  const u = db.users.find(x => String(x.id) === String(_eliminarUserId));
+  if (!u) { toast('No se encontró el perfil', 'error'); return; }
+
+  const nombre = u.nombre;
+
+  // 1. Remove from local memory
+  db.users = db.users.filter(x => String(x.id) !== String(_eliminarUserId));
+
+  // 2. In Sheets: mark as histórico (activo=eliminado) instead of deleting row
+  //    This avoids conflicts on future logins
+  const historico = {
+    ...u,
+    activo: 'eliminado',
+    user: '___' + u.user,      // prefix so login never matches
+    fechaModificacion: ahora()
+  };
+  await pushToSheets('saveUsuario', historico);
+
   _eliminarUserId = null;
   closeModal('modal-eliminar-user');
   renderUsuarios();
-  toast(`Perfil de "${u.nombre}" eliminado`, 'info');
+  toast(`Perfil de "${nombre}" eliminado correctamente`, 'info');
 }
 
 function openCambiarPass() {
