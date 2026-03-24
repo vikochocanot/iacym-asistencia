@@ -892,6 +892,35 @@
   </div>
 </div>
 
+<!-- MODAL CONFIRMAR ELIMINAR USUARIO -->
+<div class="modal-overlay" id="modal-eliminar-user">
+  <div class="modal" style="max-width:440px;text-align:center">
+    <div style="font-size:52px;margin-bottom:12px">⚠️</div>
+    <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--danger);margin-bottom:12px">
+      Eliminar perfil
+    </h3>
+    <p style="color:var(--text-muted);font-size:14px;line-height:1.7;margin-bottom:8px">
+      Estás a punto de <strong style="color:var(--danger)">eliminar permanentemente</strong> el perfil de:
+    </p>
+    <div id="eliminar-user-info" style="background:var(--deep3);border:1px solid rgba(217,83,79,0.3);border-radius:10px;padding:14px 20px;margin-bottom:16px">
+      <div id="eliminar-user-nombre" style="font-weight:700;font-size:15px;color:var(--text)"></div>
+      <div id="eliminar-user-user" style="font-size:12px;color:var(--gold);margin-top:3px"></div>
+      <div id="eliminar-user-rol" style="font-size:12px;color:var(--text-muted);margin-top:2px"></div>
+    </div>
+    <p style="font-size:13px;color:var(--danger);margin-bottom:20px;font-weight:500">
+      ⚠️ Esta acción no se puede deshacer. El usuario perderá acceso inmediatamente.
+    </p>
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button class="btn btn-secondary" onclick="closeModal('modal-eliminar-user')" style="flex:1">
+        ✕ Cancelar
+      </button>
+      <button class="btn btn-danger" onclick="ejecutarEliminarUsuario()" style="flex:1">
+        🗑 Sí, eliminar perfil
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DIAGNÓSTICO -->
 <div class="modal-overlay" id="modal-diag">
   <div class="modal" style="max-width:500px">
@@ -994,6 +1023,7 @@ async function pushToSheets(action, data) {
     saveServicio:     'Servicios',
     deleteServicio:   'Servicios',
     saveUsuario:      'Usuarios',
+    deleteUsuario:    'Usuarios',
   };
   const sheet = sheetMap[action];
   if (!sheet) return;
@@ -2144,6 +2174,7 @@ function renderUsuarios() {
           <button class="btn btn-secondary btn-sm" onclick="editUser(${u.id})" title="Editar perfil">✏️</button>
           <button class="btn btn-secondary btn-sm" onclick="openReset(${u.id})" title="Cambiar contraseña">🔑 Cambiar contraseña</button>
           ${u.id!==1?`<button class="btn btn-sm ${u.activo!==false?'btn-danger':'btn-success'}" onclick="toggleUser(${u.id})">${u.activo!==false?'Desactivar':'Activar'}</button>`:''}
+          ${u.id!==1?`<button class="btn btn-danger btn-sm" onclick="confirmarEliminarUsuario(${u.id})" title="Eliminar perfil permanentemente">🗑 Eliminar</button>`:''}
         </div>
       </td>
     </tr>`;
@@ -2279,6 +2310,34 @@ function toggleUser(id) {
   pushToSheets('saveUsuario', u);
   renderUsuarios();
   toast(`Usuario ${u.activo?'activado':'desactivado'}`,'info');
+}
+
+let _eliminarUserId = null;
+
+function confirmarEliminarUsuario(id) {
+  const u = db.users.find(x=>x.id===id);
+  if (!u) return;
+  _eliminarUserId = id;
+  document.getElementById('eliminar-user-nombre').textContent = u.nombre;
+  document.getElementById('eliminar-user-user').textContent = '👤 ' + u.user;
+  document.getElementById('eliminar-user-rol').textContent =
+    u.rol === 'admin' ? '👑 Administrador' : '⛪ Servidor · ' +
+    (Array.isArray(u.iglesias) && u.iglesias.length ? u.iglesias.join(', ') : u.iglesia || '');
+  openModal('modal-eliminar-user');
+}
+
+async function ejecutarEliminarUsuario() {
+  if (!_eliminarUserId) return;
+  const u = db.users.find(x=>x.id===_eliminarUserId);
+  if (!u) return;
+  // Remove from local db
+  db.users = db.users.filter(x=>x.id!==_eliminarUserId);
+  // Remove from Sheets
+  await pushToSheets('deleteUsuario', { id: _eliminarUserId });
+  _eliminarUserId = null;
+  closeModal('modal-eliminar-user');
+  renderUsuarios();
+  toast(`Perfil de "${u.nombre}" eliminado`, 'info');
 }
 
 function openCambiarPass() {
