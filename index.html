@@ -364,7 +364,13 @@
     </div>
     <div class="form-group">
       <label>Contraseña</label>
-      <input type="password" id="login-pass" placeholder="••••••••" />
+      <div style="position:relative">
+        <input type="password" id="login-pass" placeholder="••••••••" style="padding-right:44px" />
+        <button type="button" onclick="toggleVerLogin()" id="login-pass-eye"
+          style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;line-height:1;padding:0">
+          👁
+        </button>
+      </div>
     </div>
     <p class="error-msg" id="login-error">Usuario o contraseña incorrectos.</p>
     <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 4px">
@@ -1242,8 +1248,8 @@ function doLogin() {
   errEl.style.display = 'none';
   errEl.textContent = 'Usuario o contraseña incorrectos.';
 
-  // Normalize: compare usernames case-insensitively
-  const uNorm = u.toLowerCase();
+  // Username is case-insensitive, password IS case-sensitive
+  const uNorm = u.toLowerCase().trim();
 
   // Always check admin first - hardcoded, never fails
   if (uNorm === 'admin' && p === 'admin123') {
@@ -1254,11 +1260,12 @@ function doLogin() {
     return;
   }
 
-  // Check other users — username is case-insensitive, password is case-sensitive
+  // Check other users — username case-insensitive, password case-sensitive
   let found = null;
   for (let i = 0; i < db.users.length; i++) {
     const usr = db.users[i];
-    if (String(usr.user).trim().toLowerCase() === uNorm && String(usr.pass).trim() === p) {
+    if (String(usr.user).trim().toLowerCase() === uNorm &&
+        String(usr.pass).trim() === p.trim()) {
       found = usr;
       break;
     }
@@ -2543,6 +2550,18 @@ function testAdmin() {
   document.getElementById('login-user').value = 'admin';
   document.getElementById('login-pass').value = 'admin123';
   doLogin();
+}
+
+function toggleVerLogin() {
+  const input = document.getElementById('login-pass');
+  const btn = document.getElementById('login-pass-eye');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
 }
 
 async function diagnosticarLogin() {
