@@ -375,6 +375,11 @@
     </div>
     <br>
     <button class="btn btn-primary" onclick="doLogin()">Ingresar al sistema</button>
+    <div style="margin-top:16px;text-align:center">
+      <button onclick="diagnosticarLogin()" style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;text-decoration:underline">
+        🔍 Diagnosticar conexión
+      </button>
+    </div>
   </div>
 </div>
 
@@ -883,6 +888,23 @@
     <div style="display:flex;gap:12px;justify-content:center">
       <button class="btn btn-secondary" onclick="closeModal('modal-confirm-modificar')" style="flex:1">✕ Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarModificacion()" style="flex:1;background:linear-gradient(135deg,#D9534F,#b03030)">✔ Sí, modificar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DIAGNÓSTICO -->
+<div class="modal-overlay" id="modal-diag">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h3>🔍 Diagnóstico de conexión</h3>
+      <button class="modal-close" onclick="closeModal('modal-diag')">✕</button>
+    </div>
+    <div id="diag-content" style="font-size:13px;line-height:1.8;color:var(--text-muted)">
+      Verificando…
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-diag')">Cerrar</button>
+      <button class="btn btn-primary" onclick="diagnosticarLogin()">🔄 Re-verificar</button>
     </div>
   </div>
 </div>
@@ -2366,6 +2388,55 @@ function toast(msg, type='info') {
   el.textContent = msg;
   document.getElementById('toast-container').appendChild(el);
   setTimeout(()=>el.remove(), 3500);
+}
+
+// ─── DIAGNÓSTICO ─────────────────────────────────────────────────────────────
+async function diagnosticarLogin() {
+  const el = document.getElementById('diag-content');
+  if (!el) return;
+  openModal('modal-diag');
+  el.innerHTML = '⏳ Verificando conexión con Google Sheets…';
+
+  let html = '';
+
+  // 1. Test SheetDB connection
+  try {
+    const rows = await sheetdbGet('Usuarios');
+    html += `<div style="color:var(--success)">✅ Conexión con Sheets: OK</div>`;
+    html += `<div>👥 Usuarios en Sheets: <strong>${rows.length}</strong></div>`;
+
+    if (rows.length === 0) {
+      html += `<div style="color:var(--gold)">⚠️ La pestaña Usuarios está vacía en Sheets.<br>Ve a ⚙️ Configuración → ☁️ Sincronizar ahora</div>`;
+    } else {
+      html += `<div style="margin-top:8px"><strong>Usuarios encontrados:</strong></div>`;
+      rows.forEach(u => {
+        const activoOk = u.activo !== 'false' && u.activo !== false && u.activo !== '0' && u.activo !== 0;
+        html += `<div style="padding:4px 8px;background:var(--deep3);border-radius:4px;margin:3px 0;font-family:monospace;font-size:12px">
+          👤 <strong>${u.user}</strong> | rol: ${u.rol} | activo: <span style="color:${activoOk?'var(--success)':'var(--danger)'}">${u.activo}</span>
+        </div>`;
+      });
+    }
+
+    // Update db.users with fresh data
+    if (rows.length) {
+      db.users = rows.map(normalizeUser);
+      html += `<div style="color:var(--success);margin-top:8px">✅ Usuarios cargados en memoria: ${db.users.length}</div>`;
+    }
+
+  } catch(e) {
+    html += `<div style="color:var(--danger)">❌ Error conectando a Sheets: ${e.message}</div>`;
+    html += `<div style="color:var(--gold)">⚠️ Verifica que la URL de SheetDB sea correcta</div>`;
+  }
+
+  // 2. Show local db.users
+  html += `<div style="margin-top:12px"><strong>Usuarios en memoria local (${db.users.length}):</strong></div>`;
+  db.users.forEach(u => {
+    html += `<div style="padding:4px 8px;background:var(--deep3);border-radius:4px;margin:3px 0;font-size:12px">
+      👤 <strong>${u.user}</strong> | activo: ${u.activo}
+    </div>`;
+  });
+
+  el.innerHTML = html;
 }
 
 // Close modals on overlay click
