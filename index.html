@@ -380,7 +380,10 @@
       </label>
     </div>
     <br>
-    <button class="btn btn-primary" onclick="doLogin()">Ingresar al sistema</button>
+    <button class="btn btn-primary" onclick="doLogin()" id="login-btn">Ingresar al sistema</button>
+    <p id="login-loading" style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:10px;display:none">
+      ⏳ Cargando usuarios…
+    </p>
     <div style="margin-top:16px;text-align:center;display:flex;gap:12px;justify-content:center">
       <button onclick="diagnosticarLogin()" style="background:none;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;text-decoration:underline">
         🔍 Diagnosticar
@@ -1313,8 +1316,9 @@ function ensureAdmin() {
   if (!hasAdmin) db.users.unshift({ ...ADMIN_FALLBACK });
 }
 
-// Restore remembered credentials only — users load AFTER login
-(function initApp() {
+// Load credentials + pre-load users from Sheets BEFORE login
+(async function initApp() {
+  // Restore remembered credentials
   const savedUser = localStorage.getItem('iacym_remembered_user');
   const savedPass = localStorage.getItem('iacym_remembered_pass');
   if (savedUser && savedPass) {
@@ -1322,6 +1326,36 @@ function ensureAdmin() {
     document.getElementById('login-pass').value = savedPass;
     document.getElementById('login-remember').checked = true;
   }
+
+  // Show loading indicator
+  const loadEl = document.getElementById('login-loading');
+  const btnEl  = document.getElementById('login-btn');
+  if(loadEl) loadEl.style.display = 'block';
+  if(btnEl)  btnEl.disabled = true;
+
+  // Pre-load ALL users from Sheets so any user can log in
+  try {
+    const rows = await sheetdbGet('Usuarios');
+    if (rows && rows.length) {
+      const sheetsUsers = rows.map(normalizeUser)
+        .filter(u => !String(u.user).startsWith('___')); // exclude deleted
+      // Merge: admin always from local, others from Sheets
+      const adminLocal = { id:1, nombre:'Administrador General', user:'admin', pass:'admin123', iglesia:'Administración', rol:'admin', activo:true, iglesias:[] };
+      const sheetsAdmin = sheetsUsers.find(u => u.user === 'admin' && u.rol === 'admin');
+      const others = sheetsUsers.filter(u => !(u.user === 'admin' && u.rol === 'admin'));
+      db.users = [sheetsAdmin || adminLocal, ...others];
+      sheetsConnected = true;
+      console.log('[Init] Loaded', db.users.length, 'users from Sheets');
+    }
+  } catch(e) {
+    console.warn('[Init] Could not pre-load users:', e.message);
+  } finally {
+    if(loadEl) loadEl.style.display = 'none';
+    if(btnEl)  btnEl.disabled = false;
+  }
+
+  // Always ensure admin is available
+  ensureAdmin();
 })();
 
 function doLogout() {
